@@ -556,6 +556,23 @@ message RetryInfo {
 	int32 retry_delay = 1;
 }
 
+message MQputRequest {
+	string qname = 1;
+	bytes value = 2;
+}
+  
+  message MQputReply {
+	bytes value = 1;
+}
+  
+  message MQpopRequest {
+	string qname = 1;
+}
+  
+  message MQpopReply {
+	bytes value = 1;
+}
+
 // immudb gRPC & REST service
 service ImmuService {
 	rpc ListUsers (google.protobuf.Empty) returns (UserList){
@@ -865,4 +882,7 @@ service ImmuService {
 			body: "*"
 		};
 	};
+
+	rpc MQput (MQputRequest) returns (MQputReply) {}
+	rpc MQpop (MQpopRequest) returns (MQpopReply) {}
 }
