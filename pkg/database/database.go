@@ -28,7 +28,7 @@ import (
 	"github.com/codenotary/immudb/embedded/sql"
 	"github.com/codenotary/immudb/embedded/store"
 
-	"github.com/alexbezu/immudb/pkg/api/schema"
+	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/pkg/logger"
 )
 
@@ -84,9 +84,6 @@ type DB interface {
 	ZAdd(req *schema.ZAddRequest) (*schema.TxHeader, error)
 	VerifiableZAdd(req *schema.VerifiableZAddRequest) (*schema.VerifiableTx, error)
 	ZScan(req *schema.ZScanRequest) (*schema.ZEntries, error)
-
-	MQput(req *schema.MQputRequest) (*schema.MQputReply, error)
-	MQpop(req *schema.MQpopRequest) (*schema.MQpopReply, error)
 
 	// SQL-related
 	SQLExec(req *schema.SQLExecRequest, tx *sql.SQLTx) (ntx *sql.SQLTx, ctxs []*sql.SQLTx, err error)

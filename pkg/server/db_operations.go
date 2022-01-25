@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
-	"github.com/alexbezu/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/embedded/store"
+	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
@@ -369,25 +369,4 @@ func (s *ImmuServer) ExecAll(ctx context.Context, req *schema.ExecAllRequest) (*
 	}
 
 	return db.ExecAll(req)
-}
-
-func (s *ImmuServer) MQput(ctx context.Context, req *schema.MQputRequest) (*schema.MQputReply, error) {
-	s.mux.Lock()
-	_, ok := s.mq[req.Qname]
-	if !ok {
-		s.mq[req.Qname] = make(chan []byte, 64)
-	}
-	s.mux.Unlock()
-	s.mq[req.Qname] <- req.Value
-	return &schema.MQputReply{Value: []byte("Ok")}, nil
-}
-
-func (s *ImmuServer) MQpop(ctx context.Context, req *schema.MQpopRequest) (*schema.MQpopReply, error) {
-	s.mux.Lock()
-	_, ok := s.mq[req.Qname]
-	if !ok {
-		s.mq[req.Qname] = make(chan []byte, 64)
-	}
-	s.mux.Unlock()
-	return &schema.MQpopReply{Value: <-s.mq[req.Qname]}, nil
 }

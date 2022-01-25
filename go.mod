@@ -1,9 +1,8 @@
-module github.com/alexbezu/immudb
+module github.com/codenotary/immudb
 
 go 1.13
 
 require (
-	github.com/codenotary/immudb v1.2.2
 	github.com/fatih/color v1.12.0
 	github.com/gizak/termui/v3 v3.1.0
 	github.com/golang/protobuf v1.5.2
@@ -36,6 +35,8 @@ require (
 	google.golang.org/grpc v1.39.0
 	google.golang.org/protobuf v1.27.1
 )
+
+replace github.com/codenotary/immudb => /home/oleksii/immudb
 
 replace github.com/takama/daemon v0.12.0 => github.com/codenotary/daemon v0.0.0-20200507161650-3d4bcb5230f4
 
