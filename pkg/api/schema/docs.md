@@ -38,6 +38,10 @@
     - [LinearProof](#immudb.schema.LinearProof)
     - [LoginRequest](#immudb.schema.LoginRequest)
     - [LoginResponse](#immudb.schema.LoginResponse)
+    - [MQpopReply](#immudb.schema.MQpopReply)
+    - [MQpopRequest](#immudb.schema.MQpopRequest)
+    - [MQputReply](#immudb.schema.MQputReply)
+    - [MQputRequest](#immudb.schema.MQputRequest)
     - [MTLSConfig](#immudb.schema.MTLSConfig)
     - [NamedParam](#immudb.schema.NamedParam)
     - [NewTxRequest](#immudb.schema.NewTxRequest)
@@ -92,12 +96,12 @@
     - [ZEntries](#immudb.schema.ZEntries)
     - [ZEntry](#immudb.schema.ZEntry)
     - [ZScanRequest](#immudb.schema.ZScanRequest)
-
+  
     - [PermissionAction](#immudb.schema.PermissionAction)
     - [TxMode](#immudb.schema.TxMode)
-
+  
     - [ImmuService](#immudb.schema.ImmuService)
-
+  
 - [Scalar Value Types](#scalar-value-types)
 
 
@@ -673,6 +677,67 @@
 | ----- | ---- | ----- | ----------- |
 | token | [string](#string) |  |  |
 | warning | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="immudb.schema.MQpopReply"></a>
+
+### MQpopReply
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| value | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="immudb.schema.MQpopRequest"></a>
+
+### MQpopRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| qname | [string](#string) |  |  |
+
+
+
+
+
+
+<a name="immudb.schema.MQputReply"></a>
+
+### MQputReply
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| value | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="immudb.schema.MQputRequest"></a>
+
+### MQputRequest
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| qname | [string](#string) |  |  |
+| value | [bytes](#bytes) |  |  |
 
 
 
@@ -1584,7 +1649,7 @@
 
 
 
-
+ 
 
 
 <a name="immudb.schema.PermissionAction"></a>
@@ -1611,9 +1676,9 @@
 | ReadWrite | 2 |  |
 
 
+ 
 
-
-
+ 
 
 
 <a name="immudb.schema.ImmuService"></a>
@@ -1682,8 +1747,10 @@ immudb gRPC &amp; REST service
 | ListTables | [.google.protobuf.Empty](#google.protobuf.Empty) | [SQLQueryResult](#immudb.schema.SQLQueryResult) |  |
 | DescribeTable | [Table](#immudb.schema.Table) | [SQLQueryResult](#immudb.schema.SQLQueryResult) |  |
 | VerifiableSQLGet | [VerifiableSQLGetRequest](#immudb.schema.VerifiableSQLGetRequest) | [VerifiableSQLEntry](#immudb.schema.VerifiableSQLEntry) |  |
+| MQput | [MQputRequest](#immudb.schema.MQputRequest) | [MQputReply](#immudb.schema.MQputReply) |  |
+| MQpop | [MQpopRequest](#immudb.schema.MQpopRequest) | [MQpopReply](#immudb.schema.MQpopReply) |  |
 
-
+ 
 
 
 
@@ -1706,3 +1773,4 @@ immudb gRPC &amp; REST service
 | <a name="bool" /> bool |  | bool | boolean | boolean | bool | bool | boolean | TrueClass/FalseClass |
 | <a name="string" /> string | A string must always contain UTF-8 encoded or 7-bit ASCII text. | string | String | str/unicode | string | string | string | String (UTF-8) |
 | <a name="bytes" /> bytes | May contain any arbitrary sequence of bytes. | string | ByteString | str | []byte | ByteString | string | String (ASCII-8BIT) |
+

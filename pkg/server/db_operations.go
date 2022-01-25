@@ -3,8 +3,8 @@ package server
 import (
 	"context"
 
+	"github.com/alexbezu/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/embedded/store"
-	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/golang/protobuf/ptypes/empty"
 )
 
