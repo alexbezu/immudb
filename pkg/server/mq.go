@@ -30,5 +30,6 @@ func (s *ImmuServer) MQpop(ctx context.Context, req *schema.MQpopRequest) (*sche
 		s.mq[req.Qname] = make(chan []byte, 64)
 	}
 	s.mux.Unlock()
-	return &schema.MQpopReply{Value: <-s.mq[req.Qname]}, nil
+	reply := schema.MQpopReply{Value: <-s.mq[req.Qname]}
+	return &reply, nil
 }

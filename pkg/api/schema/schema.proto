@@ -23,7 +23,7 @@ import "google/protobuf/struct.proto";
 
 package immudb.schema;
 
-option go_package = "github.com/alexbezu/immudb/pkg/api/schema";
+option go_package = "github.com/codenotary/immudb/pkg/api/schema";
 
 message Key {
 	bytes key = 1;
