@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -280,10 +280,17 @@ func (s *session) query(st *sql.SelectStmt, parameters []*schema.NamedParam, res
 	return nil
 }
 
-func (s *session) exec(st sql.SQLStmt, parameters []*schema.NamedParam, resultColumnFormatCodes []int16, skipRowDesc bool) error {
-	if _, _, err := s.database.SQLExecPrepared([]sql.SQLStmt{st}, parameters, nil); err != nil {
+func (s *session) exec(st sql.SQLStmt, namedParams []*schema.NamedParam, resultColumnFormatCodes []int16, skipRowDesc bool) error {
+	params := make(map[string]interface{}, len(namedParams))
+
+	for _, p := range namedParams {
+		params[p.Name] = schema.RawValue(p.Value)
+	}
+
+	if _, _, err := s.database.SQLExecPrepared([]sql.SQLStmt{st}, params, nil); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -327,7 +334,7 @@ func (s *session) inferParamAndResultCols(statement string) ([]*schema.Column, [
 
 	sel, ok := stmt.(*sql.SelectStmt)
 	if ok {
-		rr, err := s.database.SQLQueryRowReader(sel, nil)
+		rr, err := s.database.SQLQueryRowReader(sel, nil, nil)
 		if err != nil {
 			return nil, nil, err
 		}

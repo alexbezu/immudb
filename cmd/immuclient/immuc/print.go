@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,25 +25,31 @@ import (
 )
 
 // PrintKV ...
-func PrintKV(key []byte, md *schema.KVMetadata, value []byte, tx uint64, verified, valueOnly bool) string {
+func PrintKV(
+	entry *schema.Entry,
+	verified, valueOnly bool,
+) string {
 	if valueOnly {
-		return fmt.Sprintf("%s\n", value)
+		return fmt.Sprintf("%s\n", entry.Value)
 	}
 
-	str := strings.Builder{}
-	if !valueOnly {
-		str.WriteString(fmt.Sprintf("tx:		%d \n", tx))
-		str.WriteString(fmt.Sprintf("key:		%s \n", key))
+	str := &strings.Builder{}
+	fmt.Fprintf(str, "tx:       %d\n", entry.Tx)
 
-		if md != nil {
-			str.WriteString(fmt.Sprintf("metadata:	{%s} \n", md))
-		}
+	if entry.Revision != 0 {
+		fmt.Fprintf(str, "rev:      %d\n", entry.Revision)
+	}
 
-		str.WriteString(fmt.Sprintf("value:		%s \n", value))
+	fmt.Fprintf(str, "key:      %s\n", entry.Key)
 
-		if verified {
-			str.WriteString(fmt.Sprintf("verified:	%t \n", verified))
-		}
+	if entry.Metadata != nil {
+		fmt.Fprintf(str, "metadata: {%s}\n", entry.Metadata)
+	}
+
+	fmt.Fprintf(str, "value:    %s\n", entry.Value)
+
+	if verified {
+		fmt.Fprintf(str, "verified: %t\n", verified)
 	}
 
 	return str.String()
@@ -60,12 +66,23 @@ func PrintSetItem(set []byte, referencedkey []byte, score float64, txhdr *schema
 		verified)
 }
 
+func PrintHealth(res *schema.DatabaseHealthResponse) string {
+	return fmt.Sprintf("pendingRequests:		%d\nlastRequestCompletedAt:		%s\n", res.PendingRequests, time.Unix(0, res.LastRequestCompletedAt*int64(time.Millisecond)))
+}
+
 // PrintState ...
 func PrintState(root *schema.ImmutableState) string {
 	if root.TxId == 0 {
-		return fmt.Sprintf("database %s is empty\n", root.Db)
+		return fmt.Sprintf("database '%s' is empty\n", root.Db)
 	}
-	return fmt.Sprintf("txID:		%d\nhash:		%x\n", root.TxId, root.TxHash)
+
+	str := strings.Builder{}
+
+	str.WriteString(fmt.Sprintf("database:	%s\n", root.Db))
+	str.WriteString(fmt.Sprintf("txID:		%d\n", root.TxId))
+	str.WriteString(fmt.Sprintf("hash:		%x\n", root.TxHash))
+
+	return str.String()
 }
 
 // PrintTx ...

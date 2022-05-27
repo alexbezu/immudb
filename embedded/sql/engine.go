@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,10 +17,10 @@ package sql
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,8 +28,9 @@ import (
 	"github.com/codenotary/immudb/embedded/store"
 )
 
-var ErrNoSupported = errors.New("not yet supported")
+var ErrNoSupported = errors.New("not supported")
 var ErrIllegalArguments = store.ErrIllegalArguments
+var ErrParsingError = errors.New("parsing error")
 var ErrDDLorDMLTxOnly = errors.New("transactions can NOT combine DDL and DML statements")
 var ErrDatabaseDoesNotExist = errors.New("database does not exist")
 var ErrDatabaseAlreadyExists = errors.New("database already exists")
@@ -37,7 +38,10 @@ var ErrNoDatabaseSelected = errors.New("no database selected")
 var ErrTableAlreadyExists = errors.New("table already exists")
 var ErrTableDoesNotExist = errors.New("table does not exist")
 var ErrColumnDoesNotExist = errors.New("column does not exist")
+var ErrColumnAlreadyExists = errors.New("column already exists")
+var ErrSameOldAndNewColumnName = errors.New("same old and new column names")
 var ErrColumnNotIndexed = errors.New("column is not indexed")
+var ErrFunctionDoesNotExist = errors.New("function does not exist")
 var ErrLimitedKeyType = errors.New("indexed key of invalid type. Supported types are: INTEGER, VARCHAR[256] OR BLOB[256]")
 var ErrLimitedAutoIncrement = errors.New("only INTEGER single-column primary keys can be set as auto incremental")
 var ErrLimitedMaxLen = errors.New("only VARCHAR and BLOB types support max length")
@@ -46,6 +50,7 @@ var ErrInvalidColumn = errors.New("invalid column")
 var ErrPKCanNotBeNull = errors.New("primary key can not be null")
 var ErrPKCanNotBeUpdated = errors.New("primary key can not be updated")
 var ErrNotNullableColumnCannotBeNull = errors.New("not nullable column can not be null")
+var ErrNewColumnMustBeNullable = errors.New("new column must be nullable")
 var ErrIndexAlreadyExists = errors.New("index already exists")
 var ErrMaxNumberOfColumnsInIndexExceeded = errors.New("number of columns in multi-column index exceeded")
 var ErrNoAvailableIndex = errors.New("no available index")
@@ -71,6 +76,7 @@ var ErrLimitedCount = errors.New("only unbounded counting is supported i.e. COUN
 var ErrTxDoesNotExist = errors.New("tx does not exist")
 var ErrNestedTxNotSupported = errors.New("nested tx are not supported")
 var ErrNoOngoingTx = errors.New("no ongoing transaction")
+var ErrNonTransactionalStmt = errors.New("non transactional statement")
 var ErrDivisionByZero = errors.New("division by zero")
 var ErrMissingParameter = errors.New("missing parameter")
 var ErrUnsupportedParameter = errors.New("unsupported parameter")
@@ -80,6 +86,7 @@ var ErrTooManyRows = errors.New("too many rows")
 var ErrAlreadyClosed = store.ErrAlreadyClosed
 var ErrAmbiguousSelector = errors.New("ambiguous selector")
 var ErrUnsupportedCast = errors.New("unsupported cast")
+var ErrColumnMismatchInUnionStmt = errors.New("column mismatch in union statement")
 
 var maxKeyLen = 256
 
@@ -95,14 +102,25 @@ type Engine struct {
 	distinctLimit int
 	autocommit    bool
 
-	defaultDatabase string
+	currentDatabase string
+
+	multidbHandler MultiDBHandler
 
 	mutex sync.RWMutex
+}
+
+type MultiDBHandler interface {
+	ListDatabases(ctx context.Context) ([]string, error)
+	CreateDatabase(ctx context.Context, db string, ifNotExists bool) error
+	UseDatabase(ctx context.Context, db string) error
+	ExecPreparedStmts(ctx context.Context, stmts []SQLStmt, params map[string]interface{}) (ntx *SQLTx, committedTxs []*SQLTx, err error)
 }
 
 //SQLTx (no-thread safe) represents an interactive or incremental transaction with support of RYOW
 type SQLTx struct {
 	engine *Engine
+
+	ctx context.Context
 
 	tx *store.OngoingTx
 
@@ -141,8 +159,15 @@ func NewEngine(store *store.ImmuStore, opts *Options) (*Engine, error) {
 	return e, nil
 }
 
-func (e *Engine) SetDefaultDatabase(dbName string) error {
-	tx, err := e.newTx(false)
+func (e *Engine) SetMultiDBHandler(handler MultiDBHandler) {
+	e.mutex.Lock()
+	defer e.mutex.Unlock()
+
+	e.multidbHandler = handler
+}
+
+func (e *Engine) SetCurrentDatabase(dbName string) error {
+	tx, err := e.NewTx(context.Background())
 	if err != nil {
 		return err
 	}
@@ -156,19 +181,19 @@ func (e *Engine) SetDefaultDatabase(dbName string) error {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 
-	e.defaultDatabase = db.name
+	e.currentDatabase = db.name
 
 	return nil
 }
 
-func (e *Engine) DefaultDatabase() string {
+func (e *Engine) CurrentDatabase() string {
 	e.mutex.RLock()
 	defer e.mutex.RUnlock()
 
-	return e.defaultDatabase
+	return e.currentDatabase
 }
 
-func (e *Engine) newTx(explicitClose bool) (*SQLTx, error) {
+func (e *Engine) NewTx(ctx context.Context) (*SQLTx, error) {
 	e.mutex.RLock()
 	defer e.mutex.RUnlock()
 
@@ -186,23 +211,23 @@ func (e *Engine) newTx(explicitClose bool) (*SQLTx, error) {
 
 	var currentDB *Database
 
-	if e.defaultDatabase != "" {
-		defaultDatabase, exists := catalog.dbsByName[e.defaultDatabase]
+	if e.currentDatabase != "" {
+		db, exists := catalog.dbsByName[e.currentDatabase]
 		if !exists {
 			return nil, ErrDatabaseDoesNotExist
 		}
 
-		currentDB = defaultDatabase
+		currentDB = db
 	}
 
 	return &SQLTx{
 		engine:           e,
+		ctx:              ctx,
 		tx:               tx,
 		catalog:          catalog,
 		currentDB:        currentDB,
 		lastInsertedPKs:  make(map[string]int64),
 		firstInsertedPKs: make(map[string]int64),
-		explicitClose:    explicitClose,
 	}, nil
 }
 
@@ -295,8 +320,8 @@ func (sqlTx *SQLTx) Closed() bool {
 
 func (c *Catalog) load(sqlPrefix []byte, tx *store.OngoingTx) error {
 	dbReaderSpec := &store.KeyReaderSpec{
-		Prefix: mapKey(sqlPrefix, catalogDatabasePrefix),
-		Filter: store.IgnoreDeleted,
+		Prefix:  mapKey(sqlPrefix, catalogDatabasePrefix),
+		Filters: []store.FilterFn{store.IgnoreExpired, store.IgnoreDeleted},
 	}
 
 	dbReader, err := tx.NewKeyReader(dbReaderSpec)
@@ -340,8 +365,8 @@ func (c *Catalog) load(sqlPrefix []byte, tx *store.OngoingTx) error {
 
 func (db *Database) loadTables(sqlPrefix []byte, tx *store.OngoingTx) error {
 	dbReaderSpec := &store.KeyReaderSpec{
-		Prefix: mapKey(sqlPrefix, catalogTablePrefix, EncodeID(db.id)),
-		Filter: store.IgnoreDeleted,
+		Prefix:  mapKey(sqlPrefix, catalogTablePrefix, EncodeID(db.id)),
+		Filters: []store.FilterFn{store.IgnoreExpired, store.IgnoreDeleted},
 	}
 
 	tableReader, err := tx.NewKeyReader(dbReaderSpec)
@@ -419,16 +444,6 @@ func (db *Database) loadTables(sqlPrefix []byte, tx *store.OngoingTx) error {
 	return nil
 }
 
-func indexKeyFrom(cols []*Column) string {
-	var buf bytes.Buffer
-
-	for _, col := range cols {
-		buf.WriteString(strconv.FormatUint(uint64(col.id), 16))
-	}
-
-	return buf.String()
-}
-
 func loadMaxPK(sqlPrefix []byte, tx *store.OngoingTx, table *Table) ([]byte, error) {
 	pkReaderSpec := &store.KeyReaderSpec{
 		Prefix:    mapKey(sqlPrefix, PIndexPrefix, EncodeID(table.db.id), EncodeID(table.id), EncodeID(PKIndexID)),
@@ -453,8 +468,8 @@ func loadColSpecs(dbID, tableID uint32, tx *store.OngoingTx, sqlPrefix []byte) (
 	initialKey := mapKey(sqlPrefix, catalogColumnPrefix, EncodeID(dbID), EncodeID(tableID))
 
 	dbReaderSpec := &store.KeyReaderSpec{
-		Prefix: initialKey,
-		Filter: store.IgnoreDeleted,
+		Prefix:  initialKey,
+		Filters: []store.FilterFn{store.IgnoreExpired, store.IgnoreDeleted},
 	}
 
 	colSpecReader, err := tx.NewKeyReader(dbReaderSpec)
@@ -513,8 +528,8 @@ func (table *Table) loadIndexes(sqlPrefix []byte, tx *store.OngoingTx) error {
 	initialKey := mapKey(sqlPrefix, catalogIndexPrefix, EncodeID(table.db.id), EncodeID(table.id))
 
 	idxReaderSpec := &store.KeyReaderSpec{
-		Prefix: initialKey,
-		Filter: store.IgnoreDeleted,
+		Prefix:  initialKey,
+		Filters: []store.FilterFn{store.IgnoreExpired, store.IgnoreDeleted},
 	}
 
 	idxSpecReader, err := tx.NewKeyReader(idxReaderSpec)
@@ -1090,48 +1105,102 @@ func normalizeParams(params map[string]interface{}) (map[string]interface{}, err
 func (e *Engine) Exec(sql string, params map[string]interface{}, tx *SQLTx) (ntx *SQLTx, committedTxs []*SQLTx, err error) {
 	stmts, err := Parse(strings.NewReader(sql))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("%w: %v", ErrParsingError, err)
 	}
 
 	return e.ExecPreparedStmts(stmts, params, tx)
 }
 
 func (e *Engine) ExecPreparedStmts(stmts []SQLStmt, params map[string]interface{}, tx *SQLTx) (ntx *SQLTx, committedTxs []*SQLTx, err error) {
+	ntx, ctxs, pendingStmts, err := e.execPreparedStmts(stmts, params, tx)
+	if err != nil {
+		return ntx, ctxs, err
+	}
+
+	if len(pendingStmts) > 0 {
+		// a different database was selected
+
+		if e.multidbHandler == nil || ntx != nil {
+			return ntx, ctxs, fmt.Errorf("%w: all statements should have been executed when not using a multidbHandler", ErrUnexpected)
+		}
+
+		var ctx context.Context
+
+		if tx != nil {
+			ctx = tx.ctx
+		} else {
+			ctx = context.Background()
+		}
+
+		ntx, hctxs, err := e.multidbHandler.ExecPreparedStmts(ctx, pendingStmts, params)
+
+		return ntx, append(ctxs, hctxs...), err
+	}
+
+	return ntx, ctxs, nil
+}
+
+func (e *Engine) execPreparedStmts(stmts []SQLStmt, params map[string]interface{}, tx *SQLTx) (ntx *SQLTx, committedTxs []*SQLTx, pendingStmts []SQLStmt, err error) {
 	if len(stmts) == 0 {
-		return nil, nil, ErrIllegalArguments
+		return nil, nil, stmts, ErrIllegalArguments
 	}
 
 	// TODO: eval params at once
 	nparams, err := normalizeParams(params)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, stmts, err
 	}
 
 	currTx := tx
 
+	execStmts := 0
+
 	for _, stmt := range stmts {
 		if stmt == nil {
-			return nil, nil, ErrIllegalArguments
+			return nil, nil, stmts[execStmts:], ErrIllegalArguments
+		}
+
+		_, isDBSelectionStmt := stmt.(*UseDatabaseStmt)
+
+		// handle the case when working in non-autocommit mode outside a transaction block
+		if isDBSelectionStmt && (currTx != nil && !currTx.closed) && !currTx.explicitClose {
+			err = currTx.commit()
+			if err == nil {
+				committedTxs = append(committedTxs, currTx)
+			}
+			if err != nil {
+				return nil, committedTxs, stmts[execStmts:], err
+			}
 		}
 
 		if currTx == nil || currTx.closed {
+			var ctx context.Context
+
+			if currTx != nil {
+				ctx = currTx.ctx
+			} else if tx != nil {
+				ctx = tx.ctx
+			} else {
+				ctx = context.Background()
+			}
+
 			// begin tx with implicit commit
-			currTx, err = e.newTx(false)
+			currTx, err = e.NewTx(ctx)
 			if err != nil {
-				return nil, committedTxs, err
+				return nil, committedTxs, stmts[execStmts:], err
 			}
 		}
 
 		ntx, err := stmt.execAt(currTx, nparams)
 		if err != nil {
 			currTx.Cancel()
-			return nil, committedTxs, err
+			return nil, committedTxs, stmts[execStmts:], err
 		}
 
 		if !currTx.closed && !currTx.explicitClose && e.autocommit {
 			err = currTx.commit()
 			if err != nil {
-				return nil, committedTxs, err
+				return nil, committedTxs, stmts[execStmts:], err
 			}
 		}
 
@@ -1140,32 +1209,40 @@ func (e *Engine) ExecPreparedStmts(stmts []SQLStmt, params map[string]interface{
 		}
 
 		currTx = ntx
+
+		execStmts++
+
+		if isDBSelectionStmt && e.multidbHandler != nil {
+			break
+		}
 	}
 
 	if currTx != nil && !currTx.closed && !currTx.explicitClose {
 		err = currTx.commit()
 		if err != nil {
-			return nil, committedTxs, err
+			return nil, committedTxs, stmts[execStmts:], err
 		}
 
 		committedTxs = append(committedTxs, currTx)
-
-		return nil, committedTxs, nil
 	}
 
-	return currTx, committedTxs, nil
+	if currTx != nil && currTx.closed {
+		currTx = nil
+	}
+
+	return currTx, committedTxs, stmts[execStmts:], nil
 }
 
 func (e *Engine) Query(sql string, params map[string]interface{}, tx *SQLTx) (RowReader, error) {
 	stmts, err := Parse(strings.NewReader(sql))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrParsingError, err)
 	}
 	if len(stmts) != 1 {
 		return nil, ErrExpectingDQLStmt
 	}
 
-	stmt, ok := stmts[0].(*SelectStmt)
+	stmt, ok := stmts[0].(DataSource)
 	if !ok {
 		return nil, ErrExpectingDQLStmt
 	}
@@ -1173,7 +1250,7 @@ func (e *Engine) Query(sql string, params map[string]interface{}, tx *SQLTx) (Ro
 	return e.QueryPreparedStmt(stmt, params, tx)
 }
 
-func (e *Engine) QueryPreparedStmt(stmt *SelectStmt, params map[string]interface{}, tx *SQLTx) (rowReader RowReader, err error) {
+func (e *Engine) QueryPreparedStmt(stmt DataSource, params map[string]interface{}, tx *SQLTx) (rowReader RowReader, err error) {
 	if stmt == nil {
 		return nil, ErrIllegalArguments
 	}
@@ -1181,7 +1258,7 @@ func (e *Engine) QueryPreparedStmt(stmt *SelectStmt, params map[string]interface
 	qtx := tx
 
 	if qtx == nil {
-		qtx, err = e.newTx(false)
+		qtx, err = e.NewTx(context.Background())
 		if err != nil {
 			return nil, err
 		}
@@ -1216,7 +1293,7 @@ func (e *Engine) Catalog(tx *SQLTx) (catalog *Catalog, err error) {
 	qtx := tx
 
 	if qtx == nil {
-		qtx, err = e.newTx(false)
+		qtx, err = e.NewTx(context.Background())
 		if err != nil {
 			return nil, err
 		}
@@ -1229,7 +1306,7 @@ func (e *Engine) Catalog(tx *SQLTx) (catalog *Catalog, err error) {
 func (e *Engine) InferParameters(sql string, tx *SQLTx) (params map[string]SQLValueType, err error) {
 	stmts, err := Parse(strings.NewReader(sql))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", ErrParsingError, err)
 	}
 
 	return e.InferParametersPreparedStmts(stmts, tx)
@@ -1243,7 +1320,7 @@ func (e *Engine) InferParametersPreparedStmts(stmts []SQLStmt, tx *SQLTx) (param
 	qtx := tx
 
 	if qtx == nil {
-		qtx, err = e.newTx(false)
+		qtx, err = e.NewTx(context.Background())
 		if err != nil {
 			return nil, err
 		}

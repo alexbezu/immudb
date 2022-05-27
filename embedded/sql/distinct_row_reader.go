@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,12 +45,16 @@ func (dr *distinctRowReader) Tx() *SQLTx {
 	return dr.rowReader.Tx()
 }
 
-func (dr *distinctRowReader) Database() *Database {
+func (dr *distinctRowReader) Database() string {
 	return dr.rowReader.Database()
 }
 
 func (dr *distinctRowReader) TableAlias() string {
 	return dr.rowReader.TableAlias()
+}
+
+func (dr *distinctRowReader) Parameters() map[string]interface{} {
+	return dr.rowReader.Parameters()
 }
 
 func (dr *distinctRowReader) SetParameters(params map[string]interface{}) error {

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ func TestSQLExecAndQuery(t *testing.T) {
 	db, closer := makeDb()
 	defer closer()
 
+	db.maxResultSize = 2
+
 	_, _, err := db.SQLExecPrepared(nil, nil, nil)
 	require.Equal(t, ErrIllegalArguments, err)
 
@@ -55,7 +57,7 @@ func TestSQLExecAndQuery(t *testing.T) {
 	require.Len(t, res.Rows, 1)
 
 	_, err = db.DescribeTable("table2", nil)
-	require.Equal(t, sql.ErrTableDoesNotExist, err)
+	require.ErrorIs(t, err, sql.ErrTableDoesNotExist)
 
 	res, err = db.DescribeTable("table1", nil)
 	require.NoError(t, err)
@@ -83,9 +85,14 @@ func TestSQLExecAndQuery(t *testing.T) {
 	_, err = db.SQLQuery(&schema.SQLQueryRequest{Sql: "CREATE INDEX ON table1(title)"}, nil)
 	require.Equal(t, sql.ErrExpectingDQLStmt, err)
 
-	q := "SELECT t.id, t.id as id2, title, active, payload FROM table1 t WHERE id <= 3 AND active != @active"
+	q := "SELECT * FROM table1 LIMIT 1"
 	res, err = db.SQLQuery(&schema.SQLQueryRequest{Sql: q, Params: params}, nil)
 	require.NoError(t, err)
+	require.Len(t, res.Rows, 1)
+
+	q = "SELECT t.id, t.id as id2, title, active, payload FROM table1 t WHERE id <= 3 AND active != @active"
+	res, err = db.SQLQuery(&schema.SQLQueryRequest{Sql: q, Params: params}, nil)
+	require.ErrorIs(t, err, ErrResultSizeLimitReached)
 	require.Len(t, res.Rows, 2)
 
 	inferredParams, err := db.InferParameters(q, nil)
@@ -121,7 +128,7 @@ func TestSQLExecAndQuery(t *testing.T) {
 		},
 		ProveSinceTx: 0,
 	})
-	require.Equal(t, sql.ErrTableDoesNotExist, err)
+	require.ErrorIs(t, err, sql.ErrTableDoesNotExist)
 
 	_, err = db.VerifiableSQLGet(&schema.VerifiableSQLGetRequest{
 		SqlGetRequest: &schema.SQLGetRequest{

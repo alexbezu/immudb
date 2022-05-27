@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"fmt"
+
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/codenotary/immudb/pkg/client/cache"
 	"github.com/codenotary/immudb/pkg/client/errors"
@@ -15,9 +16,10 @@ import (
 )
 
 func (c *immuClient) OpenSession(ctx context.Context, user []byte, pass []byte, database string) (err error) {
-	if c.SessionID != "" {
-		return ErrSessionAlreadyOpen
+	if c.IsConnected() {
+		return errors.FromError(ErrSessionAlreadyOpen)
 	}
+
 	c.Options.DialOptions = c.SetupDialOptions(c.Options)
 
 	if c.Options.ServerSigningPubKey != "" {
@@ -36,9 +38,7 @@ func (c *immuClient) OpenSession(ctx context.Context, user []byte, pass []byte, 
 		return err
 	}
 
-	if c.ServiceClient == nil {
-		c.ServiceClient = schema.NewImmuServiceClient(c.clientConn)
-	}
+	c.ServiceClient = schema.NewImmuServiceClient(c.clientConn)
 
 	resp, err := c.ServiceClient.OpenSession(ctx, &schema.OpenSessionRequest{
 		Username:     user,
@@ -73,14 +73,19 @@ func (c *immuClient) CloseSession(ctx context.Context) error {
 		return errors.FromError(ErrNotConnected)
 	}
 
+	defer func() {
+		c.SessionID = ""
+		c.clientConn = nil
+	}()
+
 	c.HeartBeater.Stop()
+
+	defer c.clientConn.Close()
 
 	_, err := c.ServiceClient.CloseSession(ctx, new(empty.Empty))
 	if err != nil {
 		return errors.FromError(err)
 	}
-
-	c.SessionID = ""
 
 	return nil
 }

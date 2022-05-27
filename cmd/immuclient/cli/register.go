@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,12 +38,14 @@ func (cli *cli) initCommands() {
 	// Set commands
 	cli.Register(&command{"set", "Add new item having the specified key and value", cli.set, []string{"key", "value"}, false})
 	cli.Register(&command{"safeset", "Add and verify new item having the specified key and value", cli.safeset, []string{"key", "value"}, false})
+	cli.Register(&command{"restore", "Restore older value of the key", cli.restore, []string{"key"}, false})
 	cli.Register(&command{"safezadd", "Add and verify new key with score to a new or existing sorted set", cli.safeZAdd, []string{"setname", "score", "key"}, false})
 	cli.Register(&command{"zadd", "Add new key with score to a new or existing sorted set", cli.zAdd, []string{"setname", "score", "key"}, false})
 
 	cli.Register(&command{"delete", "Delete item having the specified key", cli.deleteKey, []string{"key"}, false})
 
 	// Current status commands
+	cli.Register(&command{"health", "Return the number of pending requests and the time the last request was completed", cli.health, nil, false})
 	cli.Register(&command{"current", "Return the last tx and hash stored locally", cli.currentState, nil, false})
 
 	// Reference commands

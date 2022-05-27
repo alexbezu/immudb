@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ Environment variables:
   IMMUCLIENT_CERTIFICATE=./tools/mtls/4_client/certs/localhost.cert.pem
   IMMUCLIENT_CLIENTCAS=./tools/mtls/2_intermediate/certs/ca-chain.cert.pem
   IMMUCLIENT_SERVER_SIGNING_PUB_KEY=
+  IMMUCLIENT_REVISION_SEPARATOR=@
 
 IMPORTANT: All get and safeget functions return base64-encoded keys and values, while all set and safeset functions expect base64-encoded inputs.`,
 		DisableAutoGenTag: true,

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func (i *immuc) ZScan(args []string) (string, error) {
 		if j > 0 {
 			str.WriteString("\n")
 		}
-		str.WriteString(PrintKV(entry.Entry.Key, entry.Entry.Metadata, entry.Entry.Value, entry.Entry.Tx, false, i.valueOnly))
+		str.WriteString(PrintKV(entry.Entry, false, i.options.valueOnly))
 	}
 
 	return str.String(), nil
@@ -87,7 +87,7 @@ func (i *immuc) Scan(args []string) (res string, err error) {
 		if j > 0 {
 			str.WriteString("\n")
 		}
-		str.WriteString(PrintKV(entry.Key, entry.Metadata, entry.Value, entry.Tx, false, i.valueOnly))
+		str.WriteString(PrintKV(entry, false, i.options.valueOnly))
 	}
 
 	return str.String(), nil

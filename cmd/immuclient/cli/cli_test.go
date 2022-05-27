@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -257,7 +257,9 @@ func TestImmuClient_BackupAndRestoreUX(t *testing.T) {
 
 	ic := test.NewClientTest(&test.PasswordReader{
 		Pass: []string{"immudb"},
-	}, ts).WithOptions(cliOpts.WithDir(stateFileDir))
+	}, ts)
+
+	ic.Options.WithImmudbClientOptions(cliOpts.WithDir(stateFileDir))
 
 	ic.Connect(bs.Dialer)
 	ic.Login("immudb")
@@ -285,7 +287,9 @@ func TestImmuClient_BackupAndRestoreUX(t *testing.T) {
 	cliOpts.CurrentDatabase = client.DefaultDB
 	ic = test.NewClientTest(&test.PasswordReader{
 		Pass: []string{"immudb"},
-	}, ts).WithOptions(cliOpts.WithDir(stateFileDir))
+	}, ts)
+
+	ic.Options.WithImmudbClientOptions(cliOpts.WithDir(stateFileDir))
 
 	ic.Connect(bs.Dialer)
 	ic.Login("immudb")
@@ -313,7 +317,9 @@ func TestImmuClient_BackupAndRestoreUX(t *testing.T) {
 	cliOpts.CurrentDatabase = client.DefaultDB
 	ic = test.NewClientTest(&test.PasswordReader{
 		Pass: []string{"immudb"},
-	}, ts).WithOptions(cliOpts.WithDir(stateFileDir))
+	}, ts)
+
+	ic.Options.WithImmudbClientOptions(cliOpts.WithDir(stateFileDir))
 
 	ic.Connect(bs.Dialer)
 	ic.Login("immudb")

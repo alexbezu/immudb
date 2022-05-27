@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ func (r *HistoryReader) Read() (tss []uint64, err error) {
 		return nil, ErrAlreadyClosed
 	}
 
-	tss, err = r.snapshot.History(r.key, r.offset, r.descOrder, r.readLimit)
+	tss, _, err = r.snapshot.History(r.key, r.offset, r.descOrder, r.readLimit)
 	if err != nil {
 		return nil, err
 	}

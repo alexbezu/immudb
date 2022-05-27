@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,9 +24,7 @@ import (
 
 func TestNew(t *testing.T) {
 	cmd := NewCommand()
-	if len(cmd.Commands()) != 29 {
-		t.Fatalf("error initialising command expected %d, got %d", 29, len(cmd.Commands()))
-	}
+	require.Len(t, cmd.Commands(), 31)
 	cmd.SetArgs([]string{"--help"})
 
 	err := Execute(cmd)

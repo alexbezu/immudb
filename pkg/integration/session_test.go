@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -19,18 +19,20 @@ package integration
 import (
 	"context"
 	"fmt"
-	"github.com/codenotary/immudb/embedded/store"
-	ic "github.com/codenotary/immudb/pkg/client"
-	"github.com/codenotary/immudb/pkg/server"
-	"github.com/codenotary/immudb/pkg/server/servertest"
-	"github.com/codenotary/immudb/pkg/server/sessions"
-	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"math/rand"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/codenotary/immudb/embedded/store"
+	ic "github.com/codenotary/immudb/pkg/client"
+
+	"github.com/codenotary/immudb/pkg/server"
+	"github.com/codenotary/immudb/pkg/server/servertest"
+	"github.com/codenotary/immudb/pkg/server/sessions"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 func TestSession_OpenCloseSession(t *testing.T) {
@@ -48,7 +50,21 @@ func TestSession_OpenCloseSession(t *testing.T) {
 	err := client.OpenSession(context.TODO(), []byte(`immudb`), []byte(`immudb`), "defaultdb")
 	require.NoError(t, err)
 
-	client.Set(context.TODO(), []byte("my"), []byte("session"))
+	err = client.OpenSession(context.TODO(), []byte(`immudb`), []byte(`immudb`), "defaultdb")
+	require.ErrorIs(t, err, ic.ErrSessionAlreadyOpen)
+
+	client.Set(context.TODO(), []byte("myKey"), []byte("myValue"))
+
+	err = client.CloseSession(context.TODO())
+	require.NoError(t, err)
+
+	err = client.OpenSession(context.TODO(), []byte(`immudb`), []byte(`immudb`), "defaultdb")
+	require.NoError(t, err)
+
+	entry, err := client.Get(context.TODO(), []byte("myKey"))
+	require.NoError(t, err)
+	require.NotNil(t, entry)
+	require.Equal(t, []byte("myValue"), entry.Value)
 
 	err = client.CloseSession(context.TODO())
 	require.NoError(t, err)
@@ -167,4 +183,37 @@ func TestSession_ExpireSessions(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestSession_CreateDBFromSQLStmts(t *testing.T) {
+	options := server.DefaultOptions().
+		WithWebServer(false).
+		WithPgsqlServer(false)
+	bs := servertest.NewBufconnServer(options)
+
+	defer os.RemoveAll(options.Dir)
+	defer os.Remove(".state-")
+
+	bs.Start()
+	defer bs.Stop()
+
+	client := ic.NewClient().WithOptions(ic.DefaultOptions().WithDialOptions([]grpc.DialOption{grpc.WithContextDialer(bs.Dialer), grpc.WithInsecure()}))
+
+	err := client.OpenSession(context.TODO(), []byte(`immudb`), []byte(`immudb`), "defaultdb")
+	require.NoError(t, err)
+
+	_, err = client.SQLExec(context.TODO(), `
+		CREATE DATABASE db1;
+		USE db1;
+		
+		BEGIN TRANSACTION;
+			CREATE TABLE table1(id INTEGER AUTO_INCREMENT, title VARCHAR, PRIMARY KEY id);
+
+			INSERT INTO table1(title) VALUES ('title1'), ('title2');
+		COMMIT;
+	`, nil)
+	require.NoError(t, err)
+
+	err = client.CloseSession(context.TODO())
+	require.NoError(t, err)
 }

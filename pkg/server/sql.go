@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -38,7 +38,7 @@ func (s *ImmuServer) VerifiableSQLGet(ctx context.Context, req *schema.Verifiabl
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -64,19 +64,24 @@ func (s *ImmuServer) SQLExec(ctx context.Context, req *schema.SQLExecRequest) (*
 		return nil, err
 	}
 
-	tx, ctxs, err := db.SQLExec(req, nil)
+	tx, err := db.NewSQLTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	if tx != nil {
-		tx.Cancel()
+	ntx, ctxs, err := db.SQLExec(req, tx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ntx != nil {
+		ntx.Cancel()
 		err = ErrTxNotProperlyClosed
 	}
 
 	res := &schema.SQLExecResult{
 		Txs:       make([]*schema.CommittedSQLTx, len(ctxs)),
-		OngoingTx: tx != nil && !tx.Closed(),
+		OngoingTx: ntx != nil && !ntx.Closed(),
 	}
 
 	for i, ctx := range ctxs {
@@ -107,7 +112,13 @@ func (s *ImmuServer) SQLQuery(ctx context.Context, req *schema.SQLQueryRequest) 
 		return nil, err
 	}
 
-	return db.SQLQuery(req, nil)
+	tx, err := db.NewSQLTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Cancel()
+
+	return db.SQLQuery(req, tx)
 }
 
 func (s *ImmuServer) ListTables(ctx context.Context, _ *empty.Empty) (*schema.SQLQueryResult, error) {

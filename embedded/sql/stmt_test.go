@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -431,7 +431,7 @@ func TestRequiresTypeSysFnValueExp(t *testing.T) {
 		expectedError error
 	}{
 		{
-			exp:           &SysFn{fn: "NOW"},
+			exp:           &FnCall{fn: "NOW"},
 			cols:          cols,
 			params:        params,
 			implicitDB:    "db1",
@@ -440,7 +440,7 @@ func TestRequiresTypeSysFnValueExp(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			exp:           &SysFn{fn: "NOW"},
+			exp:           &FnCall{fn: "NOW"},
 			cols:          cols,
 			params:        params,
 			implicitDB:    "db1",
@@ -449,7 +449,7 @@ func TestRequiresTypeSysFnValueExp(t *testing.T) {
 			expectedError: ErrInvalidTypes,
 		},
 		{
-			exp:           &SysFn{fn: "LOWER"},
+			exp:           &FnCall{fn: "LOWER"},
 			cols:          cols,
 			params:        params,
 			implicitDB:    "db1",
@@ -650,7 +650,14 @@ func TestLikeBoolExpEdgeCases(t *testing.T) {
 		err = exp.requiresType(BooleanType, nil, nil, "", "")
 		require.ErrorIs(t, err, ErrInvalidTypes)
 
-		_, err = exp.reduce(nil, &Row{Values: map[string]TypedValue{"(db1.table1.col1)": &NullValue{}}}, "db1", "table1")
+		v := &NullValue{}
+
+		row := &Row{
+			ValuesByPosition: []TypedValue{v},
+			ValuesBySelector: map[string]TypedValue{"(db1.table1.col1)": v},
+		}
+
+		_, err = exp.reduce(nil, row, "db1", "table1")
 		require.ErrorIs(t, err, ErrInvalidTypes)
 	})
 
@@ -712,7 +719,7 @@ func TestIsConstant(t *testing.T) {
 		right: &ColSelector{},
 	}).isConstant())
 
-	require.False(t, (&SysFn{}).isConstant())
+	require.False(t, (&FnCall{}).isConstant())
 
 	require.False(t, (&ExistsBoolExp{}).isConstant())
 }

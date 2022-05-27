@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -79,11 +79,11 @@ func TestStoreIndexExists(t *testing.T) {
 
 	zscanOpts := &schema.ZScanRequest{
 		Set:   []byte(`firstIndex`),
-		Limit: MaxKeyScanLimit + 1,
+		Limit: uint64(db.MaxResultSize() + 1),
 	}
 
 	_, err = db.ZScan(zscanOpts)
-	require.Equal(t, ErrMaxKeyScanLimitExceeded, err)
+	require.ErrorIs(t, err, ErrResultSizeLimitExceeded)
 
 	//try to retrieve directly the value or full scan to debug
 

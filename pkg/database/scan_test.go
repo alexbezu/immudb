@@ -1,6 +1,22 @@
+/*
+Copyright 2022 CodeNotary, Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package database
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/codenotary/immudb/embedded/store"
@@ -11,6 +27,8 @@ import (
 func TestStoreScan(t *testing.T) {
 	db, closer := makeDb()
 	defer closer()
+
+	db.maxResultSize = 3
 
 	db.Set(&schema.SetRequest{KVs: []*schema.KeyValue{{Key: []byte(`aaa`), Value: []byte(`item1`)}}})
 	db.Set(&schema.SetRequest{KVs: []*schema.KeyValue{{Key: []byte(`bbb`), Value: []byte(`item2`)}}})
@@ -35,12 +53,12 @@ func TestStoreScan(t *testing.T) {
 	scanOptions = schema.ScanRequest{
 		SeekKey: []byte(`b`),
 		Prefix:  []byte(`a`),
-		Limit:   MaxKeyScanLimit + 1,
+		Limit:   uint64(db.MaxResultSize() + 1),
 		Desc:    true,
 	}
 
 	_, err = db.Scan(&scanOptions)
-	require.Equal(t, ErrMaxKeyScanLimitExceeded, err)
+	require.ErrorIs(t, err, ErrResultSizeLimitExceeded)
 
 	scanOptions = schema.ScanRequest{
 		SeekKey: []byte(`b`),
@@ -64,8 +82,8 @@ func TestStoreScan(t *testing.T) {
 		Desc:    false,
 	}
 
-	list1, err1 := db.Scan(&scanOptions1)
-	require.NoError(t, err1)
+	list1, err := db.Scan(&scanOptions1)
+	require.ErrorIs(t, err, ErrResultSizeLimitReached)
 	require.Exactly(t, 3, len(list1.Entries))
 	require.Equal(t, list1.Entries[0].Key, []byte(`aaa`))
 	require.Equal(t, list1.Entries[0].Value, []byte(`item1`))
@@ -179,4 +197,73 @@ func TestStoreScanDesc(t *testing.T) {
 	list, err = db.Scan(&scanOptions)
 	require.NoError(t, err)
 	require.Len(t, list.Entries, 3)
+}
+
+func TestStoreScanEndKey(t *testing.T) {
+	db, closer := makeDb()
+	defer closer()
+
+	for i := 1; i < 100; i++ {
+		_, err := db.Set(&schema.SetRequest{KVs: []*schema.KeyValue{{
+			Key:   []byte(fmt.Sprintf("key_%02d", i)),
+			Value: []byte(fmt.Sprintf("val_%02d", i)),
+		}}})
+		require.NoError(t, err)
+	}
+
+	t.Run("not inclusive", func(t *testing.T) {
+		res, err := db.Scan(&schema.ScanRequest{
+			SeekKey: []byte("key_11"),
+			EndKey:  []byte("key_44"),
+		})
+		require.NoError(t, err)
+		require.Len(t, res.Entries, 44-12)
+		for i := 12; i < 44; i++ {
+			require.Equal(t, res.Entries[i-12].Key, []byte(fmt.Sprintf("key_%02d", i)))
+			require.Equal(t, res.Entries[i-12].Value, []byte(fmt.Sprintf("val_%02d", i)))
+		}
+	})
+
+	t.Run("inclusive seek", func(t *testing.T) {
+		res, err := db.Scan(&schema.ScanRequest{
+			SeekKey:       []byte("key_11"),
+			EndKey:        []byte("key_44"),
+			InclusiveSeek: true,
+		})
+		require.NoError(t, err)
+		require.Len(t, res.Entries, 44-11)
+		for i := 11; i < 44; i++ {
+			require.Equal(t, res.Entries[i-11].Key, []byte(fmt.Sprintf("key_%02d", i)))
+			require.Equal(t, res.Entries[i-11].Value, []byte(fmt.Sprintf("val_%02d", i)))
+		}
+	})
+
+	t.Run("inclusive end", func(t *testing.T) {
+		res, err := db.Scan(&schema.ScanRequest{
+			SeekKey:      []byte("key_11"),
+			EndKey:       []byte("key_44"),
+			InclusiveEnd: true,
+		})
+		require.NoError(t, err)
+		require.Len(t, res.Entries, 44-11)
+		for i := 12; i <= 44; i++ {
+			require.Equal(t, res.Entries[i-12].Key, []byte(fmt.Sprintf("key_%02d", i)))
+			require.Equal(t, res.Entries[i-12].Value, []byte(fmt.Sprintf("val_%02d", i)))
+		}
+	})
+
+	t.Run("inclusive seek and end", func(t *testing.T) {
+		res, err := db.Scan(&schema.ScanRequest{
+			SeekKey:       []byte("key_11"),
+			EndKey:        []byte("key_44"),
+			InclusiveSeek: true,
+			InclusiveEnd:  true,
+		})
+		require.NoError(t, err)
+		require.Len(t, res.Entries, 44-10)
+		for i := 11; i <= 44; i++ {
+			require.Equal(t, res.Entries[i-11].Key, []byte(fmt.Sprintf("key_%02d", i)))
+			require.Equal(t, res.Entries[i-11].Value, []byte(fmt.Sprintf("val_%02d", i)))
+		}
+	})
 }

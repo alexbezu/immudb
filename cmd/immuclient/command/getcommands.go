@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -62,7 +62,7 @@ func (cl *commandline) safegetTxByID(cmd *cobra.Command) {
 
 func (cl *commandline) getKey(cmd *cobra.Command) {
 	ccmd := &cobra.Command{
-		Use:               "get",
+		Use:               "get key[@revision]",
 		Short:             "Get item having the specified key",
 		Aliases:           []string{"g"},
 		PersistentPreRunE: cl.ConfigChain(cl.connect),

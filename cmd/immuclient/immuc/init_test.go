@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,9 +17,10 @@ limitations under the License.
 package immuc_test
 
 import (
-	"github.com/codenotary/immudb/pkg/client/tokenservice"
 	"os"
 	"testing"
+
+	"github.com/codenotary/immudb/pkg/client/tokenservice"
 
 	. "github.com/codenotary/immudb/cmd/immuclient/immuc"
 	"github.com/codenotary/immudb/pkg/server"
@@ -37,10 +38,12 @@ func TestConnect(t *testing.T) {
 	defer os.RemoveAll(options.Dir)
 	defer os.Remove(".state-")
 
-	dialOptions := []grpc.DialOption{
-		grpc.WithContextDialer(bs.Dialer), grpc.WithInsecure(),
-	}
-	imc, err := Init(Options().WithDialOptions(dialOptions))
+	opts := OptionsFromEnv()
+	opts.GetImmudbClientOptions().
+		WithDialOptions([]grpc.DialOption{
+			grpc.WithContextDialer(bs.Dialer), grpc.WithInsecure(),
+		})
+	imc, err := Init(opts)
 	if err != nil {
 		t.Fatal(err)
 	}

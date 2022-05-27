@@ -1,12 +1,46 @@
+/*
+Copyright 2022 CodeNotary, Inc. All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+	http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
 package server
 
 import (
 	"context"
+	"time"
 
 	"github.com/codenotary/immudb/embedded/store"
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/golang/protobuf/ptypes/empty"
 )
+
+func unixMilli(t time.Time) int64 {
+	return t.Unix()*1e3 + int64(t.Nanosecond())/1e6
+}
+
+func (s *ImmuServer) DatabaseHealth(ctx context.Context, _ *empty.Empty) (*schema.DatabaseHealthResponse, error) {
+	db, err := s.getDBFromCtx(ctx, "DatabaseHealth")
+	if err != nil {
+		return nil, err
+	}
+
+	waitingRequests, lastReleaseAt := db.Health()
+
+	return &schema.DatabaseHealthResponse{
+		PendingRequests:        uint32(waitingRequests),
+		LastRequestCompletedAt: unixMilli(lastReleaseAt),
+	}, nil
+}
 
 // CurrentState ...
 func (s *ImmuServer) CurrentState(ctx context.Context, _ *empty.Empty) (*schema.ImmutableState, error) {
@@ -20,7 +54,7 @@ func (s *ImmuServer) CurrentState(ctx context.Context, _ *empty.Empty) (*schema.
 		return nil, err
 	}
 
-	state.Db = db.GetOptions().GetDBName()
+	state.Db = db.GetName()
 
 	if s.StateSigner != nil {
 		err = s.StateSigner.Sign(state)
@@ -67,7 +101,7 @@ func (s *ImmuServer) VerifiableSet(ctx context.Context, req *schema.VerifiableSe
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -110,7 +144,7 @@ func (s *ImmuServer) VerifiableGet(ctx context.Context, req *schema.VerifiableGe
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -173,7 +207,7 @@ func (s *ImmuServer) VerifiableTxById(ctx context.Context, req *schema.Verifiabl
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -244,7 +278,7 @@ func (s *ImmuServer) VerifiableSetReference(ctx context.Context, req *schema.Ver
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -305,7 +339,7 @@ func (s *ImmuServer) VerifiableZAdd(ctx context.Context, req *schema.VerifiableZ
 		alh := hdr.Alh()
 
 		newState := &schema.ImmutableState{
-			Db:     db.GetOptions().GetDBName(),
+			Db:     db.GetName(),
 			TxId:   hdr.ID,
 			TxHash: alh[:],
 		}
@@ -319,6 +353,19 @@ func (s *ImmuServer) VerifiableZAdd(ctx context.Context, req *schema.VerifiableZ
 	}
 
 	return vtx, nil
+}
+
+func (s *ImmuServer) FlushIndex(ctx context.Context, req *schema.FlushIndexRequest) (*schema.FlushIndexResponse, error) {
+	db, err := s.getDBFromCtx(ctx, "FlushIndex")
+	if err != nil {
+		return nil, err
+	}
+
+	err = db.FlushIndex(req)
+
+	return &schema.FlushIndexResponse{
+		Database: db.GetName(),
+	}, err
 }
 
 func (s *ImmuServer) CompactIndex(ctx context.Context, _ *empty.Empty) (*empty.Empty, error) {

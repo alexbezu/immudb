@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -58,6 +58,26 @@ func (cl *commandline) safeset(cmd *cobra.Command) {
 		},
 		Args: cobra.ExactArgs(2),
 	}
+	cmd.AddCommand(ccmd)
+}
+
+func (cl *commandline) restore(cmd *cobra.Command) {
+	ccmd := &cobra.Command{
+		Use:               "restore key@revision",
+		Short:             "Restore value for the key to given revision number",
+		PersistentPreRunE: cl.ConfigChain(cl.connect),
+		PersistentPostRun: cl.disconnect,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			resp, err := cl.immucl.Restore(args)
+			if err != nil {
+				cl.quit(err)
+			}
+			fprintln(cmd.OutOrStdout(), resp)
+			return nil
+		},
+		Args: cobra.ExactArgs(1),
+	}
+
 	cmd.AddCommand(ccmd)
 }
 

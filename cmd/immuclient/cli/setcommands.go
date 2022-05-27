@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,6 +22,10 @@ func (cli *cli) set(args []string) (string, error) {
 
 func (cli *cli) safeset(args []string) (string, error) {
 	return cli.immucl.VerifiedSet(args)
+}
+
+func (cli *cli) restore(args []string) (string, error) {
+	return cli.immucl.Restore(args)
 }
 
 func (cli *cli) deleteKey(args []string) (string, error) {

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,11 +24,12 @@ import (
 )
 
 func TestInitErrors(t *testing.T) {
-	ic := new(immuc)
-	require.NoError(t, ic.SetPasswordReader(nil))
+	ic := immuc{
+		options: &Options{},
+	}
 
 	viper.Set("mtls", true)
-	Options()
+	OptionsFromEnv()
 	viper.Set("mtls", false)
 
 	ic.SetValueOnly(true)

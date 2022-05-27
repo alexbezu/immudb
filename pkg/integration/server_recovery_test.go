@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ import (
 func TestServerRecovertMode(t *testing.T) {
 	serverOptions := server.DefaultOptions().
 		WithMetricsServer(false).
+		WithPgsqlServer(false).
 		WithMaintenance(true).
 		WithAuth(true).
 		WithPort(0)
@@ -37,8 +38,8 @@ func TestServerRecovertMode(t *testing.T) {
 	require.Equal(t, server.ErrAuthMustBeDisabled, err)
 
 	serverOptions = server.DefaultOptions().
-		WithMetricsServer(true).
-		WithPgsqlServer(true).
+		WithMetricsServer(false).
+		WithPgsqlServer(false).
 		WithMaintenance(true).
 		WithAuth(false).
 		WithPort(0)

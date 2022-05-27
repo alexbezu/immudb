@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -48,13 +48,14 @@ type usernameToUserdataMap struct {
 
 //defaultDbIndex systemdb should always be in index 0
 const defaultDbIndex = 0
-const sysDBIndex = int64(math.MaxInt64)
+const sysDBIndex = math.MaxInt32
 
 // ImmuServer ...
 type ImmuServer struct {
 	OS immuos.OS
 
-	dbList database.DatabaseList
+	dbList      database.DatabaseList
+	dbListMutex sync.Mutex // TODO: convert dbList into a dbManager capable of opening/closing/deleting dbs
 
 	replicators      map[string]*replication.TxReplicator
 	replicationMutex sync.Mutex

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ package database
 
 import (
 	"encoding/binary"
+	"fmt"
 	"math"
 
 	"github.com/codenotary/immudb/embedded/store"
@@ -57,7 +58,7 @@ func (d *db) ZAdd(req *schema.ZAddRequest) (*schema.TxHeader, error) {
 	// check referenced key exists and it's not a reference
 	key := EncodeKey(req.Key)
 
-	refEntry, err := d.getAt(key, req.AtTx, 0, d.st, d.st.NewTxHolder())
+	refEntry, err := d.getAtTx(key, req.AtTx, 0, d.st, d.st.NewTxHolder(), 0)
 	if err != nil {
 		return nil, err
 	}
@@ -98,14 +99,15 @@ func (d *db) ZScan(req *schema.ZScanRequest) (*schema.ZEntries, error) {
 		return nil, store.ErrIllegalArguments
 	}
 
-	if req.Limit > MaxKeyScanLimit {
-		return nil, ErrMaxKeyScanLimitExceeded
+	if req.Limit > uint64(d.maxResultSize) {
+		return nil, fmt.Errorf("%w: the specified limit (%d) is larger than the maximum allowed one (%d)",
+			ErrResultSizeLimitExceeded, req.Limit, d.maxResultSize)
 	}
 
-	limit := req.Limit
+	limit := int(req.Limit)
 
 	if req.Limit == 0 {
-		limit = MaxKeyScanLimit
+		limit = d.maxResultSize
 	}
 
 	d.mutex.RLock()
@@ -176,19 +178,18 @@ func (d *db) ZScan(req *schema.ZScanRequest) (*schema.ZEntries, error) {
 			Prefix:        prefix,
 			InclusiveSeek: req.InclusiveSeek,
 			DescOrder:     req.Desc,
-			Filter:        store.IgnoreDeleted,
+			Filters:       []store.FilterFn{store.IgnoreExpired, store.IgnoreDeleted},
 		})
 	if err != nil {
 		return nil, err
 	}
 	defer r.Close()
 
-	var entries []*schema.ZEntry
-	i := uint64(0)
-
 	tx := d.st.NewTxHolder()
 
-	for {
+	entries := &schema.ZEntries{}
+
+	for l := 1; l <= limit; l++ {
 		zKey, _, err := r.Read()
 		if err == store.ErrNoMoreEntries {
 			break
@@ -216,7 +217,7 @@ func (d *db) ZScan(req *schema.ZScanRequest) (*schema.ZEntries, error) {
 
 		atTx := binary.BigEndian.Uint64(zKey[keyOff+len(key):])
 
-		e, err := d.getAt(key, atTx, 1, snap, tx)
+		e, err := d.getAtTx(key, atTx, 1, snap, tx, 0)
 		if err == store.ErrKeyNotFound {
 			// ignore deleted ones (referenced key may have been deleted)
 			continue
@@ -233,17 +234,16 @@ func (d *db) ZScan(req *schema.ZScanRequest) (*schema.ZEntries, error) {
 			AtTx:  atTx,
 		}
 
-		entries = append(entries, zentry)
-		if i++; i == limit {
-			break
+		entries.Entries = append(entries.Entries, zentry)
+
+		if l == d.maxResultSize {
+			return entries, fmt.Errorf("%w: found at least %d entries (the maximum limit). "+
+				"Pagination over large results can be achieved by using the limit, seekKey, seekScore and seekAtTx arguments",
+				ErrResultSizeLimitReached, d.maxResultSize)
 		}
 	}
 
-	list := &schema.ZEntries{
-		Entries: entries,
-	}
-
-	return list, nil
+	return entries, nil
 }
 
 //VerifiableZAdd ...

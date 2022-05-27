@@ -16,6 +16,7 @@ import (
 	"github.com/codenotary/immudb/pkg/auth"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/test/bufconn"
 )
 
 type remoteStorageMockingWrapper struct {
@@ -296,14 +297,15 @@ func TestUpdateRemoteUUID(t *testing.T) {
 }
 
 func TestStoreOptionsForDBWithRemoteStorage(t *testing.T) {
-	require.NoError(t, os.MkdirAll("data", 0777))
-	defer os.RemoveAll("data")
+	require.NoError(t, os.MkdirAll("data/testdb", 0777))
+	defer os.RemoveAll("data/testdb")
 
 	s := DefaultServer()
-	m := memory.Open()
+	s.remoteStorage = memory.Open()
 
-	opts := s.storeOptionsForDB("testdb", m, s.Options.DefaultStoreOptions())
-	st, err := store.Open("data/testdb", opts)
+	stOpts := s.databaseOptionsFrom(s.defaultDBOptions("testdb")).GetStoreOptions()
+
+	st, err := store.Open("data/testdb", stOpts)
 	require.NoError(t, err)
 
 	tx, err := st.NewWriteOnlyTx()
@@ -331,7 +333,7 @@ func TestStoreOptionsForDBWithRemoteStorage(t *testing.T) {
 		"testdb/val_0/00000000.val",
 	} {
 		t.Run(name, func(t *testing.T) {
-			exists, err := m.Exists(context.Background(), name)
+			exists, err := s.remoteStorage.Exists(context.Background(), name)
 			require.NoError(t, err)
 			require.True(t, exists)
 		})
@@ -344,6 +346,10 @@ func TestRemoteStorageUsedForNewDB(t *testing.T) {
 	defer os.RemoveAll("data")
 
 	s := DefaultServer()
+	s.WithOptions(DefaultOptions().
+		WithPort(0).
+		WithListener(bufconn.Listen(1024 * 1024)),
+	)
 	err := s.Initialize()
 	require.NoError(t, err)
 

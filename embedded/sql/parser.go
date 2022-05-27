@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -34,8 +34,9 @@ var reservedWords = map[string]int{
 	"DATABASE":       DATABASE,
 	"SNAPSHOT":       SNAPSHOT,
 	"SINCE":          SINCE,
-	"UP":             UP,
-	"TO":             TO,
+	"AFTER":          AFTER,
+	"BEFORE":         BEFORE,
+	"UNTIL":          UNTIL,
 	"TABLE":          TABLE,
 	"PRIMARY":        PRIMARY,
 	"KEY":            KEY,
@@ -44,6 +45,8 @@ var reservedWords = map[string]int{
 	"ON":             ON,
 	"ALTER":          ALTER,
 	"ADD":            ADD,
+	"RENAME":         RENAME,
+	"TO":             TO,
 	"COLUMN":         COLUMN,
 	"INSERT":         INSERT,
 	"CONFLICT":       CONFLICT,
@@ -62,7 +65,8 @@ var reservedWords = map[string]int{
 	"SELECT":         SELECT,
 	"DISTINCT":       DISTINCT,
 	"FROM":           FROM,
-	"BEFORE":         BEFORE,
+	"UNION":          UNION,
+	"ALL":            ALL,
 	"TX":             TX,
 	"JOIN":           JOIN,
 	"HAVING":         HAVING,
@@ -115,6 +119,7 @@ var boolValues = map[string]bool{
 var cmpOps = map[string]CmpOperator{
 	"=":  EQ,
 	"!=": NE,
+	"<>": NE,
 	"<":  LT,
 	"<=": LE,
 	">":  GT,
@@ -323,6 +328,24 @@ func (l *lexer) Lex(lval *yySymType) int {
 		return IDENTIFIER
 	}
 
+	if isDoubleQuote(ch) {
+		tail, err := l.readWord()
+		if err != nil {
+			lval.err = err
+			return ERROR
+		}
+
+		if !isDoubleQuote(l.r.nextChar) {
+			lval.err = fmt.Errorf("double quote expected")
+			return ERROR
+		}
+
+		l.r.ReadByte() // consume ending quote
+
+		lval.id = strings.ToLower(tail)
+		return IDENTIFIER
+	}
+
 	if isNumber(ch) {
 		tail, err := l.readNumber()
 		if err != nil {
@@ -382,6 +405,24 @@ func (l *lexer) Lex(lval *yySymType) int {
 		}
 
 		l.namedParamsType = NamedNonPositionalParamType
+
+		ch, err := l.r.NextByte()
+		if err != nil {
+			lval.err = err
+			return ERROR
+		}
+
+		if !isLetter(ch) {
+			return ERROR
+		}
+
+		id, err := l.readWord()
+		if err != nil {
+			lval.err = err
+			return ERROR
+		}
+
+		lval.id = strings.ToLower(id)
 
 		return NPARAM
 	}
@@ -536,4 +577,8 @@ func isComparison(ch byte) bool {
 
 func isQuote(ch byte) bool {
 	return ch == 0x27
+}
+
+func isDoubleQuote(ch byte) bool {
+	return ch == 0x22
 }

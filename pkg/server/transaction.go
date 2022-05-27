@@ -1,5 +1,5 @@
 /*
-Copyright 2021 CodeNotary, Inc. All rights reserved.
+Copyright 2022 CodeNotary, Inc. All rights reserved.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package server
 
 import (
 	"context"
+
 	"github.com/codenotary/immudb/pkg/api/schema"
 	"github.com/golang/protobuf/ptypes/empty"
 )
@@ -36,7 +37,7 @@ func (s *ImmuServer) NewTx(ctx context.Context, request *schema.NewTxRequest) (*
 		return nil, err
 	}
 
-	tx, err := sess.NewTransaction(request.Mode)
+	tx, err := sess.NewTransaction(ctx, request.Mode)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +104,13 @@ func (s *ImmuServer) TxSQLExec(ctx context.Context, request *schema.SQLExecReque
 		return new(empty.Empty), ErrReadWriteTxNotOngoing
 	}
 
-	return new(empty.Empty), tx.SQLExec(request)
+	res := tx.SQLExec(request)
+
+	if tx.IsClosed() {
+		s.SessManager.DeleteTransaction(tx)
+	}
+
+	return new(empty.Empty), res
 }
 
 func (s *ImmuServer) TxSQLQuery(ctx context.Context, request *schema.SQLQueryRequest) (*schema.SQLQueryResult, error) {
