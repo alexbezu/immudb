@@ -36,8 +36,6 @@ require (
 	google.golang.org/protobuf v1.27.1
 )
 
-replace github.com/codenotary/immudb => /home/oleksii/immudb
-
 replace github.com/takama/daemon v0.12.0 => github.com/codenotary/daemon v0.0.0-20200507161650-3d4bcb5230f4
 
 replace github.com/spf13/afero => github.com/spf13/afero v1.5.1
